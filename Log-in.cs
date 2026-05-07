@@ -94,8 +94,9 @@ namespace Online_Prodavnica_Odece
                                 // Sakrijemo login formu
                                 this.Hide();
 
-                                // Ako je UlogaID == 1 smatramo da je to Administrator
-                                if (ulogaID == 1)
+                                // Ako je naziv uloge "Admin" ili "Administrator" smatramo da je to Administrator
+                                if (string.Equals(uloga, "Admin", StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(uloga, "Administrator", StringComparison.OrdinalIgnoreCase))
                                 {
                                     var admin = new AdminForm();
                                     admin.FormClosed += (s2, e2) => Application.Exit();
