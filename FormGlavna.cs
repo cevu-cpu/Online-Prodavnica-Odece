@@ -192,15 +192,15 @@ namespace Online_Prodavnica_Odece
                                             {
                                                 if (File.Exists(path)) img = Image.FromFile(path);
                                                 else
-            {
+                                                {
                                                     string combined = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
                                                     if (File.Exists(combined)) img = Image.FromFile(combined);
                                                 }
                                             }
                                         }
                                         catch { img = null; }
-            }
-       
+                                    }
+
                                     DodajProizvodUKolekciju(naziv, cena, img);
                                 }
                             }
