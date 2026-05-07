@@ -15,7 +15,7 @@ namespace Online_Prodavnica_Odece
             this.LoginBtn.Click += DugmePrijava_Click;
             this.SigninBtn.Click += DugmeRegistracija_Click;
 
-            // Kratki test da proverimo da li može da se uspostavi konekcija sa bazom
+            // Kratak test da proverimo da li može da se uspostavi konekcija sa bazom
             try
             {
                 using (var conn = Konekcija.DobijKonekciju())
@@ -47,8 +47,8 @@ namespace Online_Prodavnica_Odece
                 {
                     if (conn.State == ConnectionState.Closed) conn.Open();
 
-                    // Prvo dohvatimo zapis korisnika po korisnickom imenu
-                    string query = @"SELECT k.KorisnikID, k.Ime, k.Lozinka, u.NazivUloge 
+                    // Prvo dovatimo zapis korisnika po korisnickom imenu, uključujući UlogaID
+                    string query = @"SELECT k.KorisnikID, k.Ime, k.Lozinka, u.NazivUloge, u.UlogaID 
                                      FROM Korisnici k 
                                      JOIN Uloge u ON k.UlogaID = u.UlogaID 
                                      WHERE k.KorisnickoIme = @user";
@@ -64,6 +64,7 @@ namespace Online_Prodavnica_Odece
                             string storedPassword = reader["Lozinka"].ToString();
                             string uloga = reader["NazivUloge"].ToString();
                             int korisnikID = Convert.ToInt32(reader["KorisnikID"]);
+                            int ulogaID = reader["UlogaID"] == DBNull.Value ? 0 : Convert.ToInt32(reader["UlogaID"]);
 
                             bool ok = PasswordHelper.VerifyPassword(storedPassword, txtPass.Text.Trim());
 
@@ -90,15 +91,20 @@ namespace Online_Prodavnica_Odece
                                     }
                                 }
 
+                                // Sakrijemo login formu
                                 this.Hide();
 
-                                if (uloga == "Administrator")
+                                // Ako je UlogaID == 1 smatramo da je to Administrator
+                                if (ulogaID == 1)
                                 {
-                                    MessageBox.Show("Otvaram Admin Panel...");
+                                    var admin = new AdminForm();
+                                    admin.FormClosed += (s2, e2) => Application.Exit();
+                                    admin.Show();
                                 }
                                 else
                                 {
-                                    FormGlavna shop = new FormGlavna();
+                                    var shop = new FormGlavna();
+                                    shop.FormClosed += (s2, e2) => Application.Exit();
                                     shop.Show();
                                 }
                             }

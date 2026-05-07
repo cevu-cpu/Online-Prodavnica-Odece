@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace Online_Prodavnica_Odece
@@ -13,11 +14,9 @@ namespace Online_Prodavnica_Odece
             InitializeComponent();
             InicijalizujKategorije();
 
-            // Horizontalni scroll podešavanja
             flpProizvodi.WrapContents = false;
             flpProizvodi.AutoScroll = true;
 
-            // Wire buttons
             this.btnProfil.Click += btnProfil_Click;
             this.btnPregledKorpe.Click += BtnPregledKorpe_Click;
         }
@@ -26,20 +25,19 @@ namespace Online_Prodavnica_Odece
         {
             pnlCategoryScroll.Controls.Clear();
 
-            // 1. GRUPA: SUITS & TUXEDOS
             string[] suits = { "Suits", "Tuxedos", "Jackets & Blazers", "Pants", "Dress Pants", "Vests" };
             DodajGlavnuKategorijuSaMenijem("SUITS & TUXEDOS", suits);
 
             DodajSeparator();
 
-            // 2. GRUPA: ACCESSORIES
+
             string[] acc = { "Dress Shirts", "Ties & Bow Ties", "Belts & Suspenders", "Shoes", "Socks", "Cufflinks", "Pocket Squares", "Cummerbunds" };
             DodajGlavnuKategorijuSaMenijem("ACCESSORIES", acc);
         }
 
         private void DodajGlavnuKategorijuSaMenijem(string naslov, string[] podkategorije)
         {
-            // Glavni label koji reaguje na kursor
+
             Label lblGlavna = new Label();
             lblGlavna.Text = naslov + " ▼";
             lblGlavna.AutoSize = true;
@@ -48,7 +46,7 @@ namespace Online_Prodavnica_Odece
             lblGlavna.Margin = new Padding(20, 12, 5, 0);
             lblGlavna.ForeColor = Color.Black;
 
-            // Kreiranje Dropdown menija
+
             ContextMenuStrip dropDownMenu = new ContextMenuStrip();
             dropDownMenu.ShowCheckMargin = false;
             dropDownMenu.ShowImageMargin = false;
@@ -61,7 +59,8 @@ namespace Online_Prodavnica_Odece
                 menuItem.Font = new Font("Segoe UI", 9);
                 menuItem.Click += (s, e) => {
                     lblKategorijaNaslov.Text = item.ToUpper();
-                    // Ovde ide tvoja logika za filtriranje baze podataka
+                    // Prikaz proizvoda iz te kategorije
+                    PrikaziProizvodeZaKategoriju(item);
                 };
             }
 
@@ -132,13 +131,13 @@ namespace Online_Prodavnica_Odece
             card.Controls.Add(pb);
             card.Controls.Add(btnKupi);
 
-            // Attach product info to button
+
             btnKupi.Tag = new Models.Product { Id = flpProizvodi.Controls.Count + 1, Name = ime, Price = 54000m };
             btnKupi.Click += (s, e) => {
                 if (cartForm == null || cartForm.IsDisposed) cartForm = new CartForm();
-                // Dodaj proizvod u korpu koristeći srpski naziv metode
+
                 cartForm.DodajProizvod((Models.Product)((Button)s).Tag);
-                // Ažuriraj tekst na dugmetu za korpu ako želiš broj stavki
+
                 btnPregledKorpe.Text = $"KORPA";
             };
 
@@ -147,18 +146,77 @@ namespace Online_Prodavnica_Odece
 
         private void FormGlavna_Load(object sender, EventArgs e)
         {
-            // Simulacija proizvoda pri učitavanju
-            for (int i = 0; i < 10; i++)
+            // Pri učitavanju prikaži sve proizvode ili zadatu početnu kategoriju
+            PrikaziProizvodeZaKategoriju(null);
+        }
+
+        // Učitaj proizvode iz baze 
+        private void PrikaziProizvodeZaKategoriju(string kategorija)
+        {
+            flpProizvodi.Controls.Clear();
+            try
             {
-                DodajProizvodUKolekciju("Black Slim Fit Suit", "54.000", null);
+                using (var conn = Konekcija.DobijKonekciju())
+                {
+
+                        // S obzirom na strukturu baze (varijante u posebnoj tabeli), uzimamo minimum cene po proizvodu
+                        string sqlJoin = @"SELECT p.ProizvodID, p.Naziv, MIN(v.Cena) AS Cena, p.SlikaPutanja, k.Naziv AS Kategorija
+                                            FROM Proizvodi p
+                                            LEFT JOIN VarijanteProizvoda v ON p.ProizvodID = v.ProizvodID
+                                            LEFT JOIN Kategorije k ON p.KategorijaID = k.KategorijaID";
+                        if (!string.IsNullOrWhiteSpace(kategorija)) sqlJoin += " WHERE k.Naziv = @kat";
+                        sqlJoin += " GROUP BY p.ProizvodID, p.Naziv, p.SlikaPutanja, k.Naziv";
+
+                        using (var cmd2 = new System.Data.SqlClient.SqlCommand(sqlJoin, conn))
+                        {
+                            if (!string.IsNullOrWhiteSpace(kategorija)) cmd2.Parameters.AddWithValue("@kat", kategorija);
+
+                            using (var r = cmd2.ExecuteReader())
+                            {
+                                while (r.Read())
+                                {
+                                    string naziv = r["Naziv"] == DBNull.Value ? "" : r["Naziv"].ToString();
+                                    string cena = "0";
+                                    if (r["Cena"] != DBNull.Value)
+                                    {
+                                        try { cena = Convert.ToDecimal(r["Cena"]).ToString("0.00"); } catch { cena = r["Cena"].ToString(); }
+                                    }
+
+                                    Image img = null;
+                                    if (r["SlikaPutanja"] != DBNull.Value)
+                                    {
+                                        try
+                                        {
+                                            string path = r["SlikaPutanja"].ToString();
+                                            if (!string.IsNullOrWhiteSpace(path))
+                                            {
+                                                if (File.Exists(path)) img = Image.FromFile(path);
+                                                else
+            {
+                                                    string combined = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
+                                                    if (File.Exists(combined)) img = Image.FromFile(combined);
+                                                }
+                                            }
+                                        }
+                                        catch { img = null; }
             }
        
+                                    DodajProizvodUKolekciju(naziv, cena, img);
+                                }
+                            }
+                        }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Greška pri učitavanju proizvoda: " + ex.Message, "Greška", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void btnProfil_Click(object sender, EventArgs e)
         {
             FormProfil profil = new FormProfil();
-            profil.ShowDialog(); // Ovo je ključno!
+            profil.ShowDialog(); // Ovo je bitnio 
         }
 
         private void BtnPregledKorpe_Click(object sender, EventArgs e)
